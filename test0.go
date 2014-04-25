@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"time"
 	"log"
-	"github.com/ajstarks/svgo"
+	"fmt"
 	"net/http"
+	"github.com/ajstarks/svgo"
 )
 
 func main() {
@@ -14,18 +17,28 @@ func main() {
 	}
 }
 
-func generateSVG(canvas *svg.SVG) {
+func now() string {
+	t := time.Now()
+	return t.Format("2006/01/02 15:05:04")
+}
+
+func generateSVG(canvas *svg.SVG) *svg.SVG {
 	width := 500
 	height := 500
 	canvas.Start(width, height)
 	canvas.Circle(width/2, height/2, 100)
-	canvas.Text(width/2, height/2, "Hello, SVG",
-		"text-anchor: middle; font-size: 30px; fill: white")
+	canvas.Text(width/2, height/2, now(),
+		"text-anchor: middle; font-size: 16px; fill: white")
 	canvas.End()
+	return canvas
 }
 
 func writeSVG(w http.ResponseWriter, req *http.Request) {
+
+	var b bytes.Buffer
+	canvas := svg.New(&b)
+	svg_obj := generateSVG(canvas)
+
 	w.Header().Set("Content-Type", "image/svg+xml")
-	canvas := svg.New(w)
-	generateSVG(canvas)
+	fmt.Fprint(w, svg_obj.Writer)
 }
