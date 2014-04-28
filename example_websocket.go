@@ -28,7 +28,7 @@ var (
 
 func nowhoge() []byte {
 	t := time.Now()
-	return []byte(t.Format("2006/01/02 15:05:04"))
+	return []byte(t.Format(time.RFC3339))
 }
 
 func reader(ws *websocket.Conn) {
