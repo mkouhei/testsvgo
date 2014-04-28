@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"flag"
 	"time"
 	"log"
@@ -14,6 +13,7 @@ const (
 	writeWait = 10 * time.Second
 	pongWait = 60 * time.Second
 	pingPeriod = (pongWait * 9) / 10
+	pollPeriod = 1 * time.Second
 )
 
 var (
@@ -26,9 +26,9 @@ var (
 )
 
 
-func nowhoge() []byte {
+func now() string {
 	t := time.Now()
-	return []byte(t.Format(time.RFC3339))
+	return t.Format(time.RFC3339)
 }
 
 func reader(ws *websocket.Conn) {
@@ -49,20 +49,22 @@ func reader(ws *websocket.Conn) {
 
 func writer(ws *websocket.Conn) {
 	pingTicker := time.NewTicker(pingPeriod)
+	pollTicker := time.NewTicker(pollPeriod)
 	defer func() {
 		pingTicker.Stop()
+		pollTicker.Stop()
 		ws.Close()
 	}()
 	for {
 		select {
+		case <- pollTicker.C:
+			ws.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := ws.WriteMessage(websocket.TextMessage, []byte(now())); err != nil {
+				return
+			}
 		case <- pingTicker.C:
 			ws.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := ws.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
-				return
-			}
-		default:
-			ws.SetWriteDeadline(time.Now().Add(writeWait))
-			if err := ws.WriteMessage(websocket.TextMessage, nowhoge()); err != nil {
 				return
 			}
 		}
@@ -93,12 +95,11 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	var v = struct {
 		Host string
-		Now []byte
+		Now string
 	}{
 		r.Host,
-		nowhoge(),
+		now(),
 	}
-	fmt.Println(string(nowhoge()))
 	homeTempl.Execute(w, &v)
 }
 
