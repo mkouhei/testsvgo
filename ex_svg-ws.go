@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"bytes"
 	"io"
+	"os"
 	"flag"
 	"time"
 	"log"
@@ -45,7 +45,6 @@ func generateSVG(canvas *svg.SVG) *svg.SVG {
 	return canvas
 }
 
-
 func reader(ws *websocket.Conn) {
 	defer ws.Close()
 	ws.SetReadLimit(512)
@@ -62,8 +61,25 @@ func reader(ws *websocket.Conn) {
 	}
 }
 
-func writer2Byte (w io.Writer) {
-	fmt.Println(w)
+func writer2Byte () string {
+	
+	old := os.Stdout
+	pr, pw, _ := os.Pipe()
+	os.Stdout = pw
+	canvas := svg.New(os.Stdout)
+	generateSVG(canvas)
+
+	outC := make(chan string)
+	go func() {
+		var buf bytes.Buffer
+		io.Copy(&buf, pr)
+		outC <- buf.String()
+	}()
+
+	pw.Close()
+	os.Stdout = old
+	out := <-outC
+	return out
 }
 
 func writer(ws *websocket.Conn) {
@@ -79,13 +95,9 @@ func writer(ws *websocket.Conn) {
 		case <- pollTicker.C:
 			ws.SetWriteDeadline(time.Now().Add(writeWait))
 
-			b := new(bytes.Buffer)
-			canvas := svg.New(b)
-			//svg_obj := generateSVG(canvas)
-			//writer2Byte(svg_obj.Writer)
-			go generateSVG(canvas)
+			svg_string := writer2Byte()
 
-			if err := ws.WriteMessage(websocket.TextMessage, []byte(now())); err != nil {
+			if err := ws.WriteMessage(websocket.TextMessage, []byte(svg_string)); err != nil {
 				return
 			}
 		case <- pingTicker.C:
@@ -144,22 +156,23 @@ func main() {
 const homeHTML = `<!doctype html>
 <html>
 <head>
+<script src="//code.jquery.com/jquery-2.0.3.min.js"></script>
 <title>test websocket</title>
 </head>
 <body>
 <div id="svg">{{.Data}}</div>
 <script type="text/javascript">
-(function() {
+$(function() {
 var data = document.getElementById("svg");
 var conn = new WebSocket("ws://{{.Host}}/ws");
 conn.onclose = function(evt) {
 data.textContent = 'Connection closed';
 }
 conn.onmessage = function(evt) {
-console.log(evt.data);
-data.textContent= evt.data;
+$("div#svg > svg").replaceWith(evt.data);
+//console.log(evt.data);
 }
-})();
+});
 </script>
 </body>
 </html>
